@@ -84,6 +84,8 @@ class OptimizationParams(ParamGroup):
         self.lambda_dssim = 0.2 # [default 0.2] Loss = (1-lambda) * L1_loss + lambda * D-SSIM_Loss. L1 = abs(pred_pixel - true_pixel). SSIM = similarity between 2 images (luminance, contrast, structure)
         self.densification_interval = 100 # [default 100] Increase this to avoid running out of memory (how many iterations in between densifying/splitting gaussians)
         self.opacity_reset_interval = 1000 # [default 3000] Decrease all opacities (alpha) close to zero -> algo will automatically increase opacities again for important gaussians -> cull the rest
+        self.opacity_min = 0.005 # [default 0.005] Get rid of any splats with opacity (alpha) lower than this value
+        self.opacity_min_final = 0.1 # Get rid of any splats with opacity (alpha) lower than this value (at the end of running the algorithm)
         self.densify_from_iter = 500 # [default 500] After this many iterations, start densifying
         self.densify_until_iter = 0.8 * self.iterations # [default 15_000] After this many iterations, stop densification
         self.densify_until_iter_start_increase = 0.5 * self.iterations # After this many iterations, make it harder to densify (value should be lower than densify_until_iter)
