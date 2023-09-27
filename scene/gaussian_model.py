@@ -386,6 +386,13 @@ class GaussianModel:
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
 
+    def prune(self, min_opacity):
+        print("Pruning: original number of splats = " + str(len(self._xyz)))
+        prune_mask = (self.get_opacity < min_opacity).squeeze()
+        self.prune_points(prune_mask)
+        print("Pruning: final number of splats = " + str(len(self._xyz)))
+        torch.cuda.empty_cache()
+
     def densify_and_prune(self, max_grad, min_opacity, extent, max_screen_size):
         grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0.0

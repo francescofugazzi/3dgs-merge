@@ -107,6 +107,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Log and save
             training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
             if (iteration in saving_iterations):
+                print("\nPruning based on opacity threshold: " + str(opt.opacity_min) + " -> " + str(opt.opacity_min_final))
+                gaussians.prune(opt.opacity_min_final)
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
 
