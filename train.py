@@ -11,6 +11,7 @@
 
 import os
 import torch
+import math
 from random import randint
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render, network_gui
@@ -94,11 +95,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         with torch.no_grad():
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
+            num_gauss = len(gaussians._xyz)
             if iteration % 10 == 0:
-                progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}"})
+                progress_bar.set_postfix({'Loss': f"{ema_loss_for_log:.{7}f}",  'n': f"{num_gauss}"})
                 progress_bar.update(10)
             if iteration == opt.iterations:
                 progress_bar.close()
+            if iteration % 100 == 0:
+                print()
 
             # Log and save
             training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
@@ -107,14 +111,28 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 scene.save(iteration)
 
             # Densification
-            if iteration < opt.densify_until_iter:
+            if iteration < opt.densify_until_iter and num_gauss < opt.max_num_splats:
                 # Keep track of max radii in image-space for pruning
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold)
+                    # Set densify_grad_threshold between densify_grad_threshold_init & densify_grad_threshold_final
+                    ratio = 0 # [0-1] where 0 -> densify_grad_threshold_init and 1 -> densify_grad_threshold_final
+                    num_splats_start_increase = opt.max_num_splats * opt.densify_grad_threshold_start_increase
+                    if num_gauss > num_splats_start_increase:
+                        ratio1 = (num_gauss - num_splats_start_increase) / (opt.max_num_splats - num_splats_start_increase)
+                        if ratio1 > ratio and ratio1 <= 1:
+                            ratio = ratio1
+                    if iteration > opt.densify_until_iter_start_increase:
+                        ratio2 = (iteration - opt.densify_until_iter_start_increase) / (opt.densify_until_iter - opt.densify_until_iter_start_increase)
+                        if ratio2 > ratio and ratio2 <= 1:
+                            ratio = ratio2
+                    constA = opt.densify_grad_threshold_init
+                    constB = math.log(opt.densify_grad_threshold_final / opt.densify_grad_threshold_init)
+                    densify_grad_threshold = constA * math.exp(constB * ratio)
+                    gaussians.densify_and_prune(densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold)
                 
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
@@ -198,7 +216,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 15_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
