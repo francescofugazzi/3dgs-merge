@@ -107,6 +107,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Log and save
             training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
             if (iteration in saving_iterations):
+                print("\nPruning based on opacity threshold: " + str(opt.opacity_min) + " -> " + str(opt.opacity_min_final))
+                gaussians.prune(opt.opacity_min_final)
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
 
@@ -132,7 +134,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     constA = opt.densify_grad_threshold_init
                     constB = math.log(opt.densify_grad_threshold_final / opt.densify_grad_threshold_init)
                     densify_grad_threshold = constA * math.exp(constB * ratio)
-                    gaussians.densify_and_prune(densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold)
+                    gaussians.densify_and_prune(densify_grad_threshold, opt.opacity_min, scene.cameras_extent, size_threshold)
                 
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
