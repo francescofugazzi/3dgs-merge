@@ -70,8 +70,8 @@ class PipelineParams(ParamGroup):
 
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
-        self.max_num_splats = 5_000_000 # Stop densifying after this number of splats is reached
-        self.iterations = 10_000 # [default 30_000] Each iteration corresponds to reconstructing 1 image. The number of points being optimized increases over
+        self.max_num_splats = 7_000_000 # Stop densifying after this number of splats is reached
+        self.iterations = 15_000 # [default 30_000] Each iteration corresponds to reconstructing 1 image. The number of points being optimized increases over
         self.position_lr_init = 0.00016 # [default 0.00016] Learning rate should be smaller for more extensive scenes
         self.position_lr_final = 0.0000016 # [default 0.0000016] Learning rate should be smaller for more extensive scenes
         self.position_lr_delay_mult = 0.01 # [default 0.01]
