@@ -150,6 +150,8 @@ def text_based_detect_format(file_path):
         return "gs3d"
     elif "property float scal_f_dc_0" in header:
         return "cc"
+    elif "property float scalar_scal_f_dc_0" in header:
+        return "cc"
     else:
         return None
 
