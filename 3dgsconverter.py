@@ -5,6 +5,7 @@ from plyfile import PlyData, PlyElement
 from tqdm import tqdm
 from collections import deque
 from multiprocessing import Pool, cpu_count
+from sklearn.neighbors import NearestNeighbors
 
 def extract_vertex_data(vertices, has_scal=True, has_rgb=False):
     """Extract and convert vertex data from a structured numpy array of vertices."""
@@ -76,14 +77,14 @@ def define_dtype(has_scal=True, has_rgb=False):
 
 def text_based_detect_format(file_path):
     """Detect if the given file is in '3dgs' or 'cc' format."""
-    print("Entering text_based_detect_format function...")
+    #print("Entering text_based_detect_format function...")
     
     with open(file_path, 'rb') as file:
         header_bytes = file.read(2048)  # Read the beginning to detect the format
-        print("Read header bytes from the file...")
+        #print("Read header bytes from the file...")
 
     header = header_bytes.decode('utf-8', errors='ignore')
-    print("Decoded header to text...")
+    #print("Decoded header to text...")
 
     if "property float f_dc_0" in header:
         return "3dgs"
@@ -227,6 +228,53 @@ def apply_density_filter(plydata, voxel_size=1.0, threshold_ratio=0.0032):
     new_vertex_element = PlyElement.describe(np.array(filtered_vertices, dtype=vertices.dtype), 'vertex')
     plydata.elements = (new_vertex_element,) + plydata.elements[1:]
 
+def knn_worker(args):
+    coords, tree, k = args
+    coords = coords.reshape(1, -1)  # Reshape to a 2D array
+    distances, _ = tree.kneighbors(coords)
+    return np.mean(distances[:, 1:])
+
+def remove_flyers(plydata, k=25, threshold_factor=10.5):
+    """
+    Remove flyer vertices from the point cloud using the K-Nearest Neighbors method.
+
+    Parameters:
+    - plydata: The plydata containing the vertices of the point cloud.
+    - k: The number of neighbors for the KNN algorithm.
+    - threshold_factor: Multiplier for the threshold to determine the range for outlier removal.
+
+    Returns:
+    - plydata with filtered vertices.
+    """
+    vertices = plydata['vertex'].data
+
+    # Extract the coordinates for calculations
+    coords = np.vstack((vertices['x'], vertices['y'], vertices['z'])).T
+
+    # Compute K-Nearest Neighbors
+    nbrs = NearestNeighbors(n_neighbors=k+1, algorithm='ball_tree').fit(coords)
+    
+    # Create a pool of workers
+    num_cores = max(1, cpu_count() - 1)  # Leave one core free
+    with Pool(processes=num_cores) as pool:
+        avg_distances = pool.map(knn_worker, [(coord, nbrs, k) for coord in coords])
+
+    # Threshold for removal is based on the mean and standard deviation of these average distances
+    threshold = np.mean(avg_distances) + threshold_factor * np.std(avg_distances)
+
+    # Create a mask for points to keep
+    mask = np.array(avg_distances) < threshold
+
+    # Create a new PlyElement with the filtered vertices
+    new_vertex_element = PlyElement.describe(vertices[mask], 'vertex')
+
+    # Update the plydata elements
+    plydata.elements = (new_vertex_element,) + plydata.elements[1:]
+
+    return plydata
+
+
+
 def main():
     parser = argparse.ArgumentParser(description="Convert between standard 3D Gaussian Splat and 3D Gaussian Splat for Cloud Compare formats.")
     
@@ -238,6 +286,7 @@ def main():
     # Other flags
     parser.add_argument("--rgb", action="store_true", help="Add RGB values to the output file based on f_dc values (only for Cloud Compare format).")
     parser.add_argument("--density_filter", action="store_true", help="Filter the points to keep only regions with higher point density.")
+    parser.add_argument("--remove_flyers", action="store_true", help="Remove flyer points that are distant from the main cloud.")
     
     args = parser.parse_args()
 
@@ -245,8 +294,8 @@ def main():
     detected_format = text_based_detect_format(args.input)
     
     # Diagnose the detected_format
-    print(f"detected_format type: {type(detected_format)}")
-    print(f"detected_format value: {detected_format}")
+    #print(f"detected_format type: {type(detected_format)}")
+    #print(f"detected_format value: {detected_format}")
 
     if not detected_format:
         print("The provided file is not a recognized 3D Gaussian Splat point cloud format.")
@@ -259,6 +308,12 @@ def main():
         print("Applying density filter...")
         apply_density_filter(plydata)
         print(f"Number of vertices after density filter: {len(plydata['vertex'].data)}")
+        
+    if args.remove_flyers:
+        print("Removing flyers from the point cloud...")
+        plydata = remove_flyers(plydata)
+        print(f"Number of vertices after flyer removal: {len(plydata['vertex'].data)}")
+
 
     # Conversion operations
     if detected_format == "3dgs" and args.format == "cc":
