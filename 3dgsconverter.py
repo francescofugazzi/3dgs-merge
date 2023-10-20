@@ -155,6 +155,45 @@ def create_new_ply_with_header(input_path, output_path, detected_format, vertice
 
     new_plydata = PlyData([PlyElement.describe(final_data, 'vertex')], byte_order='=')
     new_plydata.write(output_path)
+    
+def create_3dgs_from_cc(input_path, output_path, vertices=None):
+    """Create a new 3DGS PLY file from a CC PLY file."""
+    plydata = PlyData.read(input_path)
+    
+    # Check if RGB data exists
+    has_rgb = 'red' in plydata['vertex'].data.dtype.names
+
+    vertices = plydata['vertex'].data
+
+    # Extract and convert data
+    data = []
+    for vertex in vertices:
+        entry = (
+            vertex['x'], vertex['y'], vertex['z'],
+            vertex['nx'], vertex['ny'], vertex['nz'],
+            vertex['scal_f_dc_0'], vertex['scal_f_dc_1'], vertex['scal_f_dc_2'],
+            # Assuming the CC format also uses the naming convention "scal_f_rest_X"
+            *[vertex[f'scal_f_rest_{i}'] for i in range(45)],
+            vertex['scal_opacity'],
+            vertex['scal_scale_0'], vertex['scal_scale_1'], vertex['scal_scale_2'],
+            vertex['scal_rot_0'], vertex['scal_rot_1'], vertex['scal_rot_2'], vertex['scal_rot_3']
+        )
+        data.append(entry)
+
+    dtype = [
+        ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+        ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
+        ('f_dc_0', 'f4'), ('f_dc_1', 'f4'), ('f_dc_2', 'f4'),
+        *[(f'f_rest_{i}', 'f4') for i in range(45)],
+        ('opacity', 'f4'),
+        ('scale_0', 'f4'), ('scale_1', 'f4'), ('scale_2', 'f4'),
+        ('rot_0', 'f4'), ('rot_1', 'f4'), ('rot_2', 'f4'), ('rot_3', 'f4')
+    ]
+    data_array = np.array(data, dtype=dtype)
+
+    # Write to new PLY file
+    new_plydata = PlyData([PlyElement.describe(data_array, 'vertex')], byte_order='=')
+    new_plydata.write(output_path)
 
 def get_neighbors(voxel_coords):
     """Get the face-touching neighbors of the given voxel coordinates."""
@@ -221,42 +260,51 @@ def apply_density_filter(vertices, voxel_size=1.0, threshold=15000):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Detect point cloud format: standard 3d gaussian splat or 3d gaussian splat for cloud compare and create a new file with the opposite header.")
+    parser = argparse.ArgumentParser(description="Detect point cloud format: standard 3D Gaussian Splat or 3D Gaussian Splat for Cloud Compare and create a new file with the opposite header.")
+    
     parser.add_argument("input_file", help="Path to the point cloud file.")
-    parser.add_argument("output_file", help="Path to save the new point cloud file with the opposite header.")
+    parser.add_argument("output_file", help="Path to save the converted point cloud file.")
     parser.add_argument("--rgb", action="store_true", help="Add RGB values to the output file based on f_dc values.")
     parser.add_argument("--density_filter", action="store_true", help="Filter the points to keep only regions with higher point density.")
-    args = parser.parse_args()
+    parser.add_argument("--to_3dgs", action="store_true", help="Convert from Cloud Compare format to 3D Gaussian Splat format.")
     
+    args = parser.parse_args()
+
     format_display_names = {
         "gs3d": "standard 3D Gaussian Splat",
-        "cc": "3d Gaussian Splat for Cloud Compare"
+        "cc": "3D Gaussian Splat for Cloud Compare"
     }
 
     detected_format = text_based_detect_format(args.input_file)
     
-    if detected_format:
-        print(f"Detected format of input file: {format_display_names[detected_format]}")
+    if not detected_format:
+        print("The provided file is not a recognized 3D Gaussian Splat point cloud format.")
+        return
 
-        plydata = PlyData.read(args.input_file)
-        vertices = plydata['vertex'].data
-        print(f"Initial number of vertices: {len(vertices)}")
-        
-        if args.density_filter:
-            print("Applying density filter...")
-            vertices, filtered_count = apply_density_filter(vertices)
-            print(f"Number of vertices after density filter: {filtered_count}")
-        
+    print(f"Detected format of input file: {format_display_names[detected_format]}")
+    
+    plydata = PlyData.read(args.input_file)
+    vertices = plydata['vertex'].data
+    print(f"Initial number of vertices: {len(vertices)}")
+
+    if args.density_filter:
+        print("Applying density filter...")
+        vertices, filtered_count = apply_density_filter(vertices)
+        print(f"Number of vertices after density filter: {filtered_count}")
+
+    if args.to_3dgs and detected_format == "cc":
+        print(f"Number of vertices before writing: {len(vertices)}")
+        create_3dgs_from_cc(args.input_file, args.output_file, vertices)
+        print(f"Created new 3DGS PLY file with {len(vertices)} vertices: {args.output_file}")
+    elif not args.to_3dgs and detected_format == "gs3d":
         if args.rgb:
             create_new_ply_with_header(args.input_file, args.output_file, detected_format, vertices)
         else:
-            # Just write with the updated header
-            print(f"Number of vertices before writing: {len(vertices)}")  # Add this line here
+            print(f"Number of vertices before writing: {len(vertices)}")
             create_new_ply(args.input_file, args.output_file, detected_format, vertices)
-        
-        print(f"Created new PLY file with {len(vertices)} vertices: {args.output_file}")
+        print(f"Created new Cloud Compare PLY file with {len(vertices)} vertices: {args.output_file}")
     else:
-        print("The provided file is not a recognized 3d gaussian splat point cloud format.")
+        print("Invalid conversion direction specified for the detected format.")
 
 if __name__ == "__main__":
     main()
