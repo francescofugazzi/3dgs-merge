@@ -137,25 +137,28 @@ def convert_3dgs_to_cc(input_path, output_path, plydata, process_rgb=False):
     
     print(f"Converted 3DGS file to CC format {'with' if process_rgb else 'without'} RGB and saved to {output_path}.")
     
-def convert_cc_to_3dgs(input_path, output_path, vertices=None):
-    """Create a new 3DGS PLY file from a CC PLY file."""
+def convert_cc_to_3dgs(input_path, output_path, vertices):
+    """
+    Convert a PLY file from the CC format to the 3DGS format.
+    """
+    print("Converting from CC to 3DGS format...")
     
-    plydata = PlyData.read(input_path)
+    # Define the target dtype
+    dtype_3dgs = define_dtype(has_scal=False, has_rgb=False)
     
-    # Check if RGB data exists
-    has_rgb = 'red' in plydata['vertex'].data.dtype.names
+    # Create a new empty array with the desired dtype
+    converted_data = np.empty(vertices.shape[0], dtype=dtype_3dgs)
 
-    # If vertices are not provided, read from the input file
-    if vertices is None:
-        vertices = plydata['vertex'].data
+    # Transfer fields that are common between CC and 3DGS format
+    for field in converted_data.dtype.names:
+        if field in vertices.dtype.names:
+            converted_data[field] = vertices[field]
     
-    # Extract vertex data without RGB (since we're converting to 3DGS)
-    data = extract_vertex_data(vertices, has_scal=True, has_rgb=has_rgb, strip_rgb=True)
-    dtype = define_dtype(has_scal=True, has_rgb=False)  # No RGB for 3DGS
-
     # Write to new PLY file
-    new_plydata = PlyData([PlyElement.describe(data, 'vertex')], byte_order='=')
-    new_plydata.write(output_path)
+    plydata = PlyData([PlyElement.describe(converted_data, 'vertex')], byte_order='=')
+    plydata.write(output_path)
+
+    print(f"Converted CC file to 3DGS format and saved to {output_path}.")
 
 def get_neighbors(voxel_coords):
     """Get the face-touching neighbors of the given voxel coordinates."""
@@ -266,11 +269,12 @@ def main():
         convert_3dgs_to_cc(args.input, args.output, plydata, args.rgb)
     elif detected_format == "cc" and args.format == "3dgs":
         print("Converting from CC to 3DGS format...")
+        if args.rgb:
+            print("Warning: RGB flag is ignored for conversion to 3DGS format.")
         convert_cc_to_3dgs(args.input, args.output, plydata['vertex'].data)
     else:
         print(f"Conversion direction not recognized or not supported.")
 
-    print(f"Conversion completed. Output saved to: {args.output}")
 
 if __name__ == "__main__":
     main()
