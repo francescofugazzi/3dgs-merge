@@ -86,13 +86,10 @@ def text_based_detect_format(file_path):
     print("Decoded header to text...")
 
     if "property float f_dc_0" in header:
-        print("Detected format: 3dgs")
         return "3dgs"
-    elif "property float scal_f_dc_0" in header:
-        print("Detected format: cc")
+    elif "property float scal_f_dc_0" in header or "property float scalar_scal_f_dc_0" in header or "property float scalar_f_dc_0" in header:
         return "cc"
     else:
-        print("No recognized format detected.")
         return None
 
 def convert_3dgs_to_cc(input_path, output_path, plydata, process_rgb=False):
