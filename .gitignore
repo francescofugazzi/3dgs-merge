@@ -1,5 +1,6 @@
 *.pyc
 *.ply
+*.ini
 .vscode
 data
 output
