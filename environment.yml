@@ -16,3 +16,4 @@ dependencies:
   - pip:
     - submodules/diff-gaussian-rasterization
     - submodules/simple-knn
+    - -r GaussianSplattingViewer/requirements.txt
