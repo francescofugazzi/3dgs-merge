@@ -273,8 +273,6 @@ def remove_flyers(plydata, k=25, threshold_factor=10.5):
 
     return plydata
 
-
-
 def main():
     parser = argparse.ArgumentParser(description="Convert between standard 3D Gaussian Splat and 3D Gaussian Splat for Cloud Compare formats.")
     
@@ -326,7 +324,6 @@ def main():
         convert_cc_to_3dgs(args.input, args.output, plydata['vertex'].data)
     else:
         print(f"Conversion direction not recognized or not supported.")
-
 
 if __name__ == "__main__":
     main()
