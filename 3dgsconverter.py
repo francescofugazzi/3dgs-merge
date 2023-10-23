@@ -59,7 +59,7 @@ def compute_rgb_from_vertex(plydata, detected_format=None):
     return colors
 
 def define_dtype(has_scal=True, has_rgb=False):
-    prefix = 'scal_' if has_scal else ''
+    prefix = 'scalar_scal_' if has_scal else ''
     
     dtype = [
         ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
@@ -92,50 +92,65 @@ def text_based_detect_format(file_path):
         return "cc"
     else:
         return None
+    
+def copy_data_with_prefix_check(source, target, possible_prefixes):
+    """
+    Given two structured numpy arrays (source and target), copy the data from source to target.
+    If a field exists in source but not in target, this function will attempt to find the field
+    in target by adding any of the possible prefixes to the field name.
+    """
+    for name in source.dtype.names:
+        if name in target.dtype.names:
+            target[name] = source[name]
+        else:
+            copied = False
+            for prefix in possible_prefixes:
+                # If the field starts with the prefix, try the field name without the prefix
+                if name.startswith(prefix):
+                    stripped_name = name[len(prefix):]
+                    if stripped_name in target.dtype.names:
+                        target[stripped_name] = source[name]
+                        copied = True
+                        break
+                # If the field doesn't start with any prefix, try adding the prefix
+                else:
+                    prefixed_name = prefix + name
+                    if prefixed_name in target.dtype.names:
+                        target[prefixed_name] = source[name]
+                        copied = True
+                        break
+            if not copied:
+                print(f"Warning: Field {name} not found in target.")
+
+
 
 def convert_3dgs_to_cc(input_path, output_path, plydata, process_rgb=False):
-    """
-    Convert a PLY file from the 3DGS format to the CC format with detailed debugging.
-    This function can optionally add RGB data based on the f_dc values.
-    """
-    
     print("Starting conversion process...")
     vertices = plydata['vertex'].data
     print("Loaded vertices from plydata.")
 
-    # Print the first 10 rows of the original data for debugging
     print("\nSample of original data (first 10 rows):")
     for i in range(10):
         print(vertices[i])
 
     if process_rgb:
         print("\nProcessing RGB data...")
-        # Extract RGB colors from f_dc values
         colors = compute_rgb_from_vertex(plydata)
         
         dtype_for_cc = define_dtype(has_scal=True, has_rgb=True)
         extended_vertices = np.zeros(vertices.shape, dtype=dtype_for_cc)
 
-        # Copy existing data to the extended_vertices
-        for name in vertices.dtype.names:
-            if name in extended_vertices.dtype.names:
-                extended_vertices[name] = vertices[name]
-            elif "scal_" + name in extended_vertices.dtype.names:
-                extended_vertices["scal_" + name] = vertices[name]
-            else:
-                print(f"Warning: Field {name} not found in extended_vertices.")
+        # Use the helper function to copy the data
+        copy_data_with_prefix_check(vertices, extended_vertices, ["", "scal_", "scalar_", "scalar_scal_"])
 
-        # Add RGB data
         extended_vertices['red'] = colors[:, 0]
         extended_vertices['green'] = colors[:, 1]
         extended_vertices['blue'] = colors[:, 2]
 
-        # Print the first 10 rows of the extended data for debugging
         print("\nSample of extended data with RGB (first 10 rows):")
         for i in range(10):
             print(extended_vertices[i])
 
-        # Write the new data to the output file
         print("\nWriting extended data to the output file...")
         new_plydata = PlyData([PlyElement.describe(extended_vertices, 'vertex')], byte_order='=')
         new_plydata.write(output_path)
@@ -144,21 +159,13 @@ def convert_3dgs_to_cc(input_path, output_path, plydata, process_rgb=False):
         dtype_for_cc = define_dtype(has_scal=True, has_rgb=False)
         converted_data = np.zeros(vertices.shape, dtype=dtype_for_cc)
 
-        # Copy data from vertices to converted_data
-        for name in vertices.dtype.names:
-            if name in converted_data.dtype.names:
-                converted_data[name] = vertices[name]
-            elif "scal_" + name in converted_data.dtype.names:
-                converted_data["scal_" + name] = vertices[name]
-            else:
-                print(f"Warning: Field {name} not found in converted_data.")
+        # Use the helper function to copy the data
+        copy_data_with_prefix_check(vertices, converted_data, ["", "scal_", "scalar_", "scalar_scal_"])
 
-        # Print the first 10 rows of the converted data for debugging
         print("\nSample of converted data without RGB (first 10 rows):")
         for i in range(10):
             print(converted_data[i])
 
-        # Write the converted data to the output file
         print("\nWriting converted data to the output file...")
         new_plydata = PlyData([PlyElement.describe(converted_data, 'vertex')], byte_order='=')
         new_plydata.write(output_path)
@@ -166,26 +173,14 @@ def convert_3dgs_to_cc(input_path, output_path, plydata, process_rgb=False):
     print(f"\nConverted 3DGS file to CC format {'with' if process_rgb else 'without'} RGB and saved to {output_path}.")
     
 def convert_cc_to_3dgs(input_path, output_path, vertices):
-    """
-    Convert a PLY file from the CC format to the 3DGS format with detailed debugging.
-    """
     print("Converting from CC to 3DGS format...")
     
     # Create a new structured numpy array for 3DGS format
-    dtype_3dgs = define_dtype(has_scal=False, has_rgb=False)  # Define 3DGS dtype without scal_ prefix
+    dtype_3dgs = define_dtype(has_scal=False, has_rgb=False)  # Define 3DGS dtype without any prefix
     converted_data = np.zeros(vertices.shape[0], dtype=dtype_3dgs)
     
-    # Copy data from original vertices to the new format
-    common_fields = set(vertices.dtype.names) & set([field[0] for field in dtype_3dgs])
-    for name in common_fields:
-        converted_data[name] = vertices[name]
-    
-    # Handle scal_ prefixed fields
-    for name in vertices.dtype.names:
-        if name.startswith("scal_"):
-            stripped_name = name[5:]
-            if stripped_name in converted_data.dtype.names:
-                converted_data[stripped_name] = vertices[name]
+    # Use the helper function to copy the data
+    copy_data_with_prefix_check(vertices, converted_data, ["", "scal_", "scalar_", "scalar_scal_"])
 
     print("\nSample of converted data (first 10 rows):")
     for i in range(10):
@@ -196,9 +191,6 @@ def convert_cc_to_3dgs(input_path, output_path, vertices):
     new_plydata.write(output_path)
 
     print(f"\nConverted CC file to 3DGS format and saved to {output_path}.")
-
-
-
 
 def get_neighbors(voxel_coords):
     """Get the face-touching neighbors of the given voxel coordinates."""
