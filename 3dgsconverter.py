@@ -240,8 +240,11 @@ def parallel_voxel_counting(vertices, voxel_size):
 
     return total_voxel_counts
 
-def apply_density_filter(plydata, voxel_size=1.0, threshold_ratio=0.0032):
+def apply_density_filter(plydata, voxel_size=1.0, threshold_percentage=0.32):
     vertices = plydata['vertex'].data
+
+    # Convert threshold_percentage into a ratio
+    threshold_ratio = threshold_percentage / 100.0
 
     # Parallelized voxel counting
     voxel_counts = parallel_voxel_counting(vertices, voxel_size)
