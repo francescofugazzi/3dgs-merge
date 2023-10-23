@@ -92,6 +92,7 @@ class OptimizationParams(ParamGroup):
         self.densify_grad_threshold_init = 0.0002 # [default 0.0002; Section 5.2: tau_pos] Increase this to avoid running out of memory. If very high, no densification will occur
         self.densify_grad_threshold_final = 0.002 # See densify_grad_threshold_start_increase
         self.densify_grad_threshold_start_increase = 0.7 # [0-1] Start increasing densify_grad_threshold from init -> final once there are densify_grad_threshold_start_increase * max_num_splats of splats
+        self.random_background = False
         super().__init__(parser, "Optimization Parameters")
 
 def get_combined_args(parser : ArgumentParser):
